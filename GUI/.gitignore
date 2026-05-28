@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+embeddings/
+DINO3D/
+*.pyc
+*.pyo
+*.pyd
+
+# Environments
+venv/
+.env/
+.venv/
+neurofind_env/
+
+# Data files
+*.tif
+*.tiff
+*.npy
+*.npz
+*.zip
+
+# Model files
+*.pth
+*.pt
+*.ckpt
+*.sec
+
+# Outputs / logs
+outputs/
+results/
+logs/*.csv
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

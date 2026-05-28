@@ -1,0 +1,77 @@
+project: neurofind
+model: DINOv3
+
+data:
+  folder: data/time_data_labeled
+
+  stacks:
+    A1: 33648_A1_TS_dftcorr.tif
+    A5: 33648_A5_TS_dftcorr.tif
+    B2: 33648_B2_TS_dftcorr.tif
+
+  labels:
+    A1: 33648_A1_TS_dftcorr_01.csv
+    A5: 33648_A5_TS_dftcorr_02.csv
+    B2: 33648_B2_TS_dftcorr_04.csv
+
+  stack_pairs:
+    - query: A1
+      target: A5
+    - query: A5
+      target: B2   
+
+volume_index:
+  query: 0
+  target: 0
+
+crop_size:
+  z: 7
+  y: 128
+  x: 128
+
+embddings:
+  status: to_be_computed_on_hpc
+  target_stacks:
+    - A5
+    - B2
+  note: Full target-stack embeddings are needed for full-search baseline experiments.
+
+baseline:
+  name: full_search
+  description: Search over all candidate points in the target stack.
+
+hypotheses:
+  h1:
+    name: local_search
+    question: A smaller search area around the selected point may find the human-labeled match faster than full candidate-point search.
+    comapre_strategies: 
+      - full_search
+      - local_search
+    search_radii: [25, 50, 100, 150, 200]
+    correctness_reference: human_labels
+    metrics:
+      - accuracy
+      - runtime_seconds
+      - num_candidates
+    
+  h2:
+    name: grid_search
+    question: I want to test different combinations of search area and candidate selection around the clicked point to find which setup gives the best balance between accuracy and search time.
+    compare_strategies:
+      - full_search
+      - grid_search
+    search_radii: [25, 50, 100, 150, 200]
+    candidate_selection:
+      - bright
+      - less bright
+      - dark
+    correctness_reference: human_labels
+    metrics:
+      - accuracy
+      - runtime-seconds
+      - num_candidates
+    
+notes:
+  - Human labels are used as the correctness reference.
+  - Full search is used as the baseline search strategy.
+  - Local and grid-search strategies are evaluated against both retrieval quality and computational efficiency.

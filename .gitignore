@@ -1,0 +1,38 @@
+# Data and models
+data/
+models/
+*.tif
+*.tiff
+*.npy
+*.npz
+*.zip
+*.pth
+*.pt
+*.ckpt
+*.sec
+
+# External repositories
+dinov3/
+
+# Embeddings
+GUI/embeddings/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environments
+venv/
+.venv/
+.env/
+
+# Outputs
+outputs/
+results/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
