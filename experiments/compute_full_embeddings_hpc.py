@@ -27,7 +27,8 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Set to an integer for testing, e.g. 1000.
 # Set to None to compute embeddings for all candidates.
-MAX_CANDIDATES = 1000
+MAX_CANDIDATES = 100
+
 
 CROP_SIZE_Z = 7
 CROP_SIZE_Y = 128
