@@ -19,11 +19,11 @@ DATA_DIR = BASE_DIR / "data" / "time_data_labeled"
 QUERY_STACK_PATH = DATA_DIR / "33648_A1_TS_dftcorr.tif"
 MODEL_PATH = BASE_DIR / "models" / "spine_embedder_ssl_dinov3_128_7_5pth.sec"
 
-TARGET_CANDIDATES_PATH = BASE_DIR / "outputs" / "embeddings" / "candidate_points_A5_test.npy" # path to saved candidate points coordinates
-TARGET_EMBEDDINGS_PATH = BASE_DIR / "outputs" / "embeddings" / "embeddings_dinov3_A5_128_7_test.npy" # path to saved DINOv3 embeddings for candidate points (test subset of 1000 candidates)
+TARGET_CANDIDATES_PATH = BASE_DIR / "outputs" / "embeddings" / "candidate_points_A5.npy" # path to saved candidate points coordinates
+TARGET_EMBEDDINGS_PATH = BASE_DIR / "outputs" / "embeddings" / "embeddings_dinov3_A5_128_7.npy" # path to saved DINOv3 embeddings for candidate points (test subset of 1000 candidates)
 
 LABEL_PAIRS_PATH = BASE_DIR / "outputs" / "label_pairs_A1_A5_frame0.csv" # loads the 15 human-labeled A1 and A5 pairs.
-OUTPUT_RESULTS_PATH = BASE_DIR / "outputs" / "Ex1_local_search_results_A1_A5.csv" # saves the experiment result table
+OUTPUT_RESULTS_PATH = BASE_DIR / "outputs" / "Exp2_local_search_results_A1_A5.csv" # saves the experiment result table
 
 # Now the query point should come from "label_pairs_A1_A5_frame0.csv"
 # QUERY_POINT = np.array([3, 256, 256]) # example query point coordinates (z, y, x), later come from real click
@@ -70,7 +70,7 @@ def distance_3d(point_a, point_b):
     return np.linalg.norm(point_a - point_b)
 
 def main(): # define the main function where the experiment runs.
-    print("Starting minimal local-search test...")
+    print("Starting full A1 to A5 local-search experiment...")
     results = [] # create an empty list where each experiment result will be stored
 
     # loads the 15 matched A1 and A5 human label pairs
