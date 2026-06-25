@@ -1,220 +1,841 @@
-from pathlib import Path #import path so we can build file paths that work across operating systems
-import time # import time so we can measure how long full search and local search take
-import numpy as np # import numpy for loading .npy files and doing array operations
-import torch # import PyTorch because embeddings are compared as Torch tensors.
-import torch.nn.functional as F # import cosine similarity function from PyTorch
-import sys # to manually add another folder to Python's import search path
-import tifffile # to read microscopy image stacks saved as .tif files
-import pandas as pd # to show results as a clean table
+from pathlib import Path
+import sys
+import time
 
-# Get the project root folder.
-# __file__ is the path of this script.
-# parents[1] goes two levles up from experiments/local_search_minimal.py to the project root.
-BASE_DIR = Path(__file__).resolve().parents[1]
-GUI_DIR = Path(BASE_DIR / "GUI") # path to GUI folder where model and helper functions are defined.
-sys.path.append(str(GUI_DIR)) # add the GUI folder to Python's module search path, this allows Python to find and import utils.py from the GUI folder.
+import numpy as np
+import pandas as pd
+import tifffile
+import torch
+import torch.nn.functional as F
+
+
+# ---------------------------------------------------------------------
+# Project paths
+# ---------------------------------------------------------------------
+
+BASE_DIR = Path("C:/Users/z0051rra/Downloads/Neurofind Project")
+
+GUI_DIR = BASE_DIR / "GUI"
+sys.path.append(str(GUI_DIR))
+
 from utils import DINOv3Encoder, crop_around_point, compute_embedding
 
+
 DATA_DIR = BASE_DIR / "data" / "time_data_labeled"
-QUERY_STACK_PATH = DATA_DIR / "33648_A1_TS_dftcorr.tif"
-MODEL_PATH = BASE_DIR / "models" / "spine_embedder_ssl_dinov3_128_7_5pth.sec"
+OUTPUT_DIR = BASE_DIR / "outputs"
+EMBEDDINGS_DIR = BASE_DIR / "data" / "embeddings"
 
-TARGET_CANDIDATES_PATH = BASE_DIR / "outputs" / "embeddings" / "candidate_points_A5.npy" # path to saved candidate points coordinates
-TARGET_EMBEDDINGS_PATH = BASE_DIR / "outputs" / "embeddings" / "embeddings_dinov3_A5_128_7.npy" # path to saved DINOv3 embeddings for candidate points (test subset of 1000 candidates)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-LABEL_PAIRS_PATH = BASE_DIR / "outputs" / "label_pairs_A1_A5_frame0.csv" # loads the 15 human-labeled A1 and A5 pairs.
-OUTPUT_RESULTS_PATH = BASE_DIR / "outputs" / "Exp2_local_search_results_A1_A5.csv" # saves the experiment result table
 
-# Now the query point should come from "label_pairs_A1_A5_frame0.csv"
-# QUERY_POINT = np.array([3, 256, 256]) # example query point coordinates (z, y, x), later come from real click
-SEARCH_RADII = [50, 100, 150, 200, 250] # example search radii in pixels for local search
+# A5 is now both the query stack and target stack.
+A5_STACK_PATH = "C:/Users/z0051rra/Downloads/Neurofind Project/data/time_data_labeled/33648_A5_TS_dftcorr.tif"
 
-def load_stack(path): # define a function that laods a TIFF image stack
-    stack = tifffile.imread(path) # read the TIFF file using tifffile, the result is a Numpy array containing the image data.
-    if stack.ndim == 4: # check if the loaded stack has 4 dimensions, can have shape like (time, z, y, x)
-        stack = stack[0] # select the first time volume, this changes the stack from (time, z, y, x) to (z, y, x)
-    return stack # return the 3D stack
+MODEL_PATH = (
+    BASE_DIR
+    / "models"
+    / "spine_embedder_ssl_dinov3_128_7_5pth.sec"
+)
 
-def filter_candidates_by_radius(candidate_points, center_point, radius): # define a function that keeps only target candidates close to the query point.
-    # candidate_points has shape (N, 3) where N is number of candidates and each candidates has three coordinate values (z, y, x).
-    # center_point is the selected/query point, it also has the form (z, y, x).
-    # radius is the maximum allowed distance from the center point for candidates to be included in the local search.
+# Use your full A5 candidate files here.
+TARGET_CANDIDATES_PATH = (
+    EMBEDDINGS_DIR
+    / "candidate_points_A5.npy"
+)
 
-    dy = candidate_points[:, 1] - center_point[1] # compute difference in y coordinate between every candidate and the center point.
-    dx = candidate_points[:, 2] - center_point[2] # compute difference in x coordinate between every candidate and the center point.
+TARGET_EMBEDDINGS_PATH = (
+    EMBEDDINGS_DIR
+    / "embeddings_dinov3_A5_128_7.npy"
+)
 
-    distances = np.sqrt(dy**2 + dx**2) # compute 2D distance in thee y-x image plane, we ignore z here because query stack and target stack can have different z-depths.
-    mask = distances <= radius # create  a bookean mask that is True for candidates inside the radius and false means the candidate is outside the radius.
-    local_candidates = candidate_points[mask] # use the mask to select only the nearby candidate points.
-    return local_candidates, mask # return both
+TARGET_VOLUME_INDICES_PATH = (
+    EMBEDDINGS_DIR
+    / "candidate_volume_indices_A5.npy"
+)
 
-def find_best_match(query_embedding, target_embeddings, candidate_points): # define a function that compares one query embedding with many target embeddings.
-    # query_embedding is one of feature vector, shape is usually (128,).
-    # target_embeddings contains many feature vectors, shape is usually (N, 128).
-    # candidate_points contains the coordinates  belonging to target_embeddings, candidate_points[i] belongs to target_embeddings[i].
-    query_embedding_batch = query_embedding.unsqueeze(0) # add one batch dimension to query_embdding, this changes shape from (128,) to (1, 128) so we can compare it with all target embeddings at once.
-    similarities = F.cosine_similarity( # compute cosine similarity between the query embedding and every target embedding, output shape is (N,), higher value means more similar according to the embedding model.
-        query_embedding_batch, 
-        target_embeddings, 
-        dim=1
+# This is the pair table that contains frame-0 query labels
+# and frame-1 human target labels.
+LABEL_PAIRS_PATH = (
+    DATA_DIR / "formatted_human_labels" / "A5_frame0_to_frame1_pairs.csv"
+)
+
+OUTPUT_RESULTS_PATH = (
+    OUTPUT_DIR / "A5_frame0_to_frame1_local_search_results.csv"
+)
+
+# ---------------------------------------------------------------------
+# Experiment configuration
+# ---------------------------------------------------------------------
+
+# Human-labelled query X and Y positions are in micrometers.
+# TIFF and candidate-point coordinates are in pixels.
+A5_PIXELS_PER_UM_X = 7.246376
+A5_PIXELS_PER_UM_Y = 7.246376
+
+# Local-search radii are defined in micrometers.
+SEARCH_RADII_UM = [5, 10, 15, 20, 25, 30]
+
+# Use 1 while debugging.
+# Use None to process all 28 stable tracks.
+NUMBER_OF_PAIRS_TO_RUN = None
+
+# Adds one empty CSV row between consecutive tracks.
+ADD_BLANK_ROW_BETWEEN_TRACKS = True
+
+
+# ---------------------------------------------------------------------
+# Output columns
+# ---------------------------------------------------------------------
+
+OUTPUT_COLUMNS = [
+    "strategy",
+    "track_id",
+    "query_frame",
+    "target_frame",
+    "radius_um",
+    "number_of_candidates",
+    "query_point_um_z,y,x",
+    "predicted_point_um_z,y,x",
+    "runtime_seconds",
+    "same_match_as_full_search",
+]
+
+
+# ---------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------
+
+def load_time_stack(path):
+    """
+    Load the complete A5 TIFF while preserving the time dimension.
+
+    Expected shape:
+        (T, Z, Y, X)
+    """
+
+    stack = tifffile.imread(path)
+
+    if stack.ndim != 4:
+        raise ValueError(
+            "Expected a four-dimensional A5 stack with shape "
+            f"(T, Z, Y, X), but received shape {stack.shape}."
+        )
+
+    return stack
+
+
+def point_um_to_pixel(x_um, y_um, z_slice):
+    """
+    Convert a human-labelled query coordinate into TIFF coordinates.
+
+    X and Y:
+        micrometers -> pixels
+
+    Z:
+        remains a slice index
+
+    Returns:
+        (z, y, x)
+    """
+
+    x_px = int(round(x_um * A5_PIXELS_PER_UM_X))
+    y_px = int(round(y_um * A5_PIXELS_PER_UM_Y))
+    z_px = int(round(z_slice))
+
+    return z_px, y_px, x_px
+
+
+def point_pixel_to_um(point_px):
+    """
+    Convert an internal candidate coordinate into physical XY units.
+
+    Input:
+        (z_slice, y_pixel, x_pixel)
+
+    Output:
+        (z_slice, y_micrometers, x_micrometers)
+
+    Z remains a slice index because physical Z spacing is not part
+    of Hypothesis 1.
+    """
+
+    z_slice = int(point_px[0])
+    y_um = float(point_px[1] / A5_PIXELS_PER_UM_Y)
+    x_um = float(point_px[2] / A5_PIXELS_PER_UM_X)
+
+    return z_slice, y_um, x_um
+
+
+def format_point(point):
+    """
+    Store one complete coordinate tuple in one CSV column.
+    """
+
+    if point is None:
+        return None
+
+    return f"({point[0]}, {point[1]}, {point[2]})"
+
+
+def filter_candidates_by_radius_um(
+    candidate_points,
+    center_point_px,
+    radius_um,
+):
+    """
+    Keep target candidates inside an XY radius measured in micrometers.
+
+    candidate_points:
+        NumPy array with shape (N, 3), ordered as (z, y, x).
+
+    center_point_px:
+        Query coordinate ordered as (z, y, x).
+
+    Z is deliberately ignored when defining the local XY area.
+    """
+
+    dy_px = candidate_points[:, 1] - center_point_px[1]
+    dx_px = candidate_points[:, 2] - center_point_px[2]
+
+    dy_um = dy_px / A5_PIXELS_PER_UM_Y
+    dx_um = dx_px / A5_PIXELS_PER_UM_X
+
+    distances_um = np.sqrt(
+        dy_um**2 + dx_um**2
     )
-    best_idx = torch.argmax(similarities).item() # find the index of the highest similarity score, this is the best matching target candidate.
-    best_point = candidate_points[best_idx] # use the best index to get the coordinatte of the best matching coordinate.
-    highest_similarity_score = similarities[best_idx].item() # use the best index to get thee similarity score of the best match.
-    return best_point, highest_similarity_score # return predicted best coordinate and its similarity score.
 
-# this helper method measure how far the predicted point is from the human-labeled target point, later this becoms the accuracy-related metric.
-def distance_3d(point_a, point_b):
-    point_a = np.array(point_a)
-    point_b = np.array(point_b)
-    return np.linalg.norm(point_a - point_b)
+    mask = distances_um <= radius_um
+    local_candidates = candidate_points[mask]
 
-def main(): # define the main function where the experiment runs.
-    print("Starting full A1 to A5 local-search experiment...")
-    results = [] # create an empty list where each experiment result will be stored
+    return local_candidates, mask
 
-    # loads the 15 matched A1 and A5 human label pairs
-    label_pairs = pd.read_csv(LABEL_PAIRS_PATH)
-    print(f"Number of label pairs: {len(label_pairs)}")
 
-    candidate_points = np.load(TARGET_CANDIDATES_PATH) # load candidate point coordinates from the .npy file.
-    target_embeddings = np.load(TARGET_EMBEDDINGS_PATH) # load precomputed DINOv3 embeddings from the .npy file.
-    
-    print(f"Candidate points shape: {candidate_points.shape}")
-    print(f"Target embeddings shape: {target_embeddings.shape}")
+def find_best_match(
+    query_embedding,
+    target_embeddings,
+    candidate_points,
+):
+    """
+    Compare one query embedding with the supplied target embeddings.
 
-    target_embeddings = torch.from_numpy(target_embeddings) # convert target embeddings from NumPy array to Torch tensor, PyTorch cosine_similarity expects Torch tensors.
-    target_embeddings = target_embeddings.float() # convert target embeddings to float32, this avoid dtype problems during similarity computation.
+    Returns:
+        best candidate coordinate as a NumPy array: (z, y, x)
+    """
 
-    # query_embedding = target_embeddings[0]  # for this minimal test, we use the first target embedding as a fake query embedding, this lets us test the search code before adding DINOv3 crop computation.
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # select the device for model computation, if a GPU is available, use CUDA; otherwise use CPU.
-    print(f"Device: {device}")
-
-    query_stack = load_stack(QUERY_STACK_PATH) # load the A1 query stack from the TIFF file. 
-    print(f"Query stack shape: {query_stack.shape}") # print the query stack shape to veify that it is a 3D volume.
-
-    model = DINOv3Encoder() # create the DINOv3 model object.
-    checkpoint = torch.load(MODEL_PATH, map_location=device) # load the saved trained weights from the checkpoint file.
-    model.load_state_dict(checkpoint) # put the checkpoint weights into the model architecuter.
-    model.to(device) # move the model to the selected device
-    model.eval() # put the model in evaluation mode means we use the model for inference, not training. 
-    
-    # query_point_tuple = tuple(QUERY_POINT) # convert QUERY_POINT from NumPy array to a normal tuple, crop_around_point expects the point as (z, y, x)
-    # row = label_pairs.iloc[0] # first we test only the first human-labeled pair
-    for _, row in label_pairs.iterrows():
-        query_point_tuple = ( # creates the A1 query point in the correct image-array order
-            int(row["query_px_z"]),
-            int(row["query_px_y"]),
-            int(row["query_px_x"])
+    if len(candidate_points) == 0:
+        raise ValueError(
+            "find_best_match received zero candidate points."
         )
-        target_point_tuple = ( # human-labeled correct A5 target point
-            int(row["target_px_z"]),
-            int(row["target_px_y"]),
-            int(row["target_px_x"]),
-        )
-        print("\nUsing label pair:")
-        print(f"track_id: {row["track_id"]}")
-        print("query_point A1 z, y, x:", query_point_tuple)
-        print("target point A5 z, y, x:", target_point_tuple)
 
-        z, y, x = query_point_tuple # extract z, y and x from the query point.
-        if z < 0 or z >= query_stack.shape[0]: # check the z-coordinate is valid for the query stack, this prevents trying to crop from a z-slice that does not exist.
+    query_embedding_batch = query_embedding.unsqueeze(0)
+
+    similarities = F.cosine_similarity(
+        query_embedding_batch,
+        target_embeddings,
+        dim=1,
+    )
+
+    best_index = int(
+        torch.argmax(similarities).item()
+    )
+
+    return np.asarray(candidate_points[best_index])
+
+
+def empty_result_row():
+    """
+    Create one completely empty row for visual separation in the CSV.
+    """
+
+    return {
+        column: None
+        for column in OUTPUT_COLUMNS
+    }
+
+
+# ---------------------------------------------------------------------
+# Main experiment
+# ---------------------------------------------------------------------
+
+def main():
+    print(
+        "Starting A5 frame 0 to frame 1 "
+        "full-search versus local-search experiment..."
+    )
+
+    results = []
+
+    # -------------------------------------------------------------
+    # Load experiment input table
+    # -------------------------------------------------------------
+
+    label_pairs = pd.read_csv(
+        LABEL_PAIRS_PATH
+    )
+
+    print(
+        "Number of available query rows:",
+        len(label_pairs),
+    )
+
+    # Target-coordinate columns are deliberately not required.
+    required_columns = {
+        "track_id",
+        "query_frame",
+        "target_frame",
+        "query_x_um",
+        "query_y_um",
+        "query_z_slice",
+    }
+
+    missing_columns = (
+        required_columns
+        - set(label_pairs.columns)
+    )
+
+    if missing_columns:
+        raise ValueError(
+            "The experiment-input CSV is missing columns: "
+            f"{sorted(missing_columns)}"
+        )
+
+    if NUMBER_OF_PAIRS_TO_RUN is not None:
+        label_pairs = label_pairs.iloc[
+            :NUMBER_OF_PAIRS_TO_RUN
+        ].copy()
+
+    label_pairs = label_pairs.reset_index(
+        drop=True
+    )
+
+    print(
+        "Number of queries selected:",
+        len(label_pairs),
+    )
+
+    # -------------------------------------------------------------
+    # Load complete A5 candidate arrays
+    # -------------------------------------------------------------
+
+    all_candidate_points = np.load(
+        TARGET_CANDIDATES_PATH
+    )
+
+    all_target_embeddings = np.load(
+        TARGET_EMBEDDINGS_PATH
+    )
+
+    all_volume_indices = np.load(
+        TARGET_VOLUME_INDICES_PATH
+    )
+
+    print(
+        "All candidate points shape:",
+        all_candidate_points.shape,
+    )
+
+    print(
+        "All target embeddings shape:",
+        all_target_embeddings.shape,
+    )
+
+    print(
+        "All volume indices shape:",
+        all_volume_indices.shape,
+    )
+
+    if not (
+        len(all_candidate_points)
+        == len(all_target_embeddings)
+        == len(all_volume_indices)
+    ):
+        raise ValueError(
+            "Candidate points, embeddings, and volume indices "
+            "must have matching lengths."
+        )
+
+    # -------------------------------------------------------------
+    # Load complete A5 TIFF
+    # -------------------------------------------------------------
+
+    a5_stack = load_time_stack(
+        A5_STACK_PATH
+    )
+
+    print(
+        "A5 stack shape:",
+        a5_stack.shape,
+    )
+
+    # -------------------------------------------------------------
+    # Load DINOv3 model
+    # -------------------------------------------------------------
+
+    device = torch.device(
+        "cuda"
+        if torch.cuda.is_available()
+        else "cpu"
+    )
+
+    print(
+        "Device:",
+        device,
+    )
+
+    model = DINOv3Encoder()
+
+    checkpoint = torch.load(
+        MODEL_PATH,
+        map_location=device,
+    )
+
+    model.load_state_dict(
+        checkpoint
+    )
+
+    model.to(device)
+    model.eval()
+
+    # -------------------------------------------------------------
+    # Process selected query tracks
+    # -------------------------------------------------------------
+
+    for pair_number, row in label_pairs.iterrows():
+        track_id = int(
+            row["track_id"]
+        )
+
+        query_frame = int(
+            row["query_frame"]
+        )
+
+        target_frame = int(
+            row["target_frame"]
+        )
+
+        query_x_um = float(
+            row["query_x_um"]
+        )
+
+        query_y_um = float(
+            row["query_y_um"]
+        )
+
+        query_z_slice = int(
+            round(row["query_z_slice"])
+        )
+
+        query_point_um = (
+            query_z_slice,
+            query_y_um,
+            query_x_um,
+        )
+
+        # Pixel coordinates are required internally for TIFF cropping
+        # and candidate-radius filtering.
+        query_point_px = point_um_to_pixel(
+            x_um=query_x_um,
+            y_um=query_y_um,
+            z_slice=query_z_slice,
+        )
+
+        print("\n" + "=" * 70)
+        print(
+            f"Query {pair_number + 1}: "
+            f"TRACK_ID {track_id}"
+        )
+        print("=" * 70)
+
+        print(
+            "Query frame:",
+            query_frame,
+        )
+
+        print(
+            "Target search frame:",
+            target_frame,
+        )
+
+        print(
+            "Query point "
+            "(z-slice, y-µm, x-µm):",
+            query_point_um,
+        )
+
+        print(
+            "Internal query coordinate "
+            "(z, y, x pixels):",
+            query_point_px,
+        )
+
+        # ---------------------------------------------------------
+        # Validate frames
+        # ---------------------------------------------------------
+
+        if not 0 <= query_frame < a5_stack.shape[0]:
             raise ValueError(
-                f"Invalid z={z}. Query stack valid z range is 0 to {query_stack.shape[0] - 1}."
+                f"Invalid query frame {query_frame}. "
+                f"Valid range is 0 to "
+                f"{a5_stack.shape[0] - 1}."
             )
 
-        crop = crop_around_point( # extract a 3D crop around the selected query point, the crop is 7x128x128 that is what DINOv3 expects.
-            query_stack,
-            query_point_tuple,
+        if not 0 <= target_frame < a5_stack.shape[0]:
+            raise ValueError(
+                f"Invalid target frame {target_frame}. "
+                f"Valid range is 0 to "
+                f"{a5_stack.shape[0] - 1}."
+            )
+
+        query_volume = a5_stack[
+            query_frame
+        ]
+
+        z, y, x = query_point_px
+
+        if not 0 <= z < query_volume.shape[0]:
+            raise ValueError(
+                f"Invalid query z={z}. "
+                f"Valid range is 0 to "
+                f"{query_volume.shape[0] - 1}."
+            )
+
+        if not 0 <= y < query_volume.shape[1]:
+            raise ValueError(
+                f"Invalid query y={y}. "
+                f"Valid range is 0 to "
+                f"{query_volume.shape[1] - 1}."
+            )
+
+        if not 0 <= x < query_volume.shape[2]:
+            raise ValueError(
+                f"Invalid query x={x}. "
+                f"Valid range is 0 to "
+                f"{query_volume.shape[2] - 1}."
+            )
+
+        # ---------------------------------------------------------
+        # Select candidates belonging only to the target frame
+        # ---------------------------------------------------------
+
+        target_frame_mask = (
+            all_volume_indices == target_frame
+        )
+
+        candidate_points = (
+            all_candidate_points[
+                target_frame_mask
+            ]
+        )
+
+        target_embeddings_numpy = (
+            all_target_embeddings[
+                target_frame_mask
+            ]
+        )
+
+        print(
+            "Target-frame candidate count:",
+            len(candidate_points),
+        )
+
+        if len(candidate_points) == 0:
+            raise ValueError(
+                f"No candidates found for "
+                f"target frame {target_frame}."
+            )
+
+        target_embeddings = (
+            torch.from_numpy(
+                target_embeddings_numpy
+            )
+            .float()
+            .cpu()
+        )
+
+        # ---------------------------------------------------------
+        # Compute query embedding
+        # ---------------------------------------------------------
+
+        crop = crop_around_point(
+            query_volume,
+            query_point_px,
             size_z=7,
             size_y=128,
-            size_x=128
+            size_x=128,
         )
 
-        query_embedding = compute_embedding(crop, model, device) # pas the crop through and get a query embedding
-        query_embedding = query_embedding.float() # convert to float32
-        query_embedding = query_embedding.cpu() # move the query embedding to cpu so it is on the same device as target_embeddings
-
-        print(f"Query embedding shape: {query_embedding.shape}")
-
-        print("\nFull search baseline")
-        start_time = time.time() # start measuring runtime.
-        best_point, highest_similarity_score = find_best_match(
-            query_embedding=query_embedding, 
-            target_embeddings=target_embeddings,
-            candidate_points=candidate_points
-        )
-        runtime_seconds = time.time() - start_time # compute how many seconds the full search took.
-        print(f"Number of candidates: {len(candidate_points)}")
-        print(f"Best point: {best_point}, Best score: {highest_similarity_score:.4f}")
-        print(f"Runtime: {runtime_seconds:.6f} seconds")
-        results.append({
-            "strategy": "full_search",
-            "track_id": int(row["track_id"]),
-            "radius": None,
-            "number_of_candidates": len(candidate_points),
-            "predicted_z,y,x": best_point,
-            "target_z,y,x": target_point_tuple,
-            "distance_to_target": float(distance_3d(best_point, target_point_tuple)),
-            "highest_similarity_score": float(highest_similarity_score),
-            "runtime_seconds": float(runtime_seconds)
-        })
-
-        print("\nLocal Search")
-        for radius in SEARCH_RADII: # loop over every search radius we want to test.
-            local_candidates, mask = filter_candidates_by_radius( # filter candidates using the current radius.
-                candidate_points=candidate_points,
-                center_point=query_point_tuple,
-                radius=radius
+        with torch.no_grad():
+            query_embedding = compute_embedding(
+                crop,
+                model,
+                device,
             )
-        
-            local_embeddings = target_embeddings[mask] # use the same mask to select the corresponding embeddings
-            print(f"\nRadius: {radius}") # print the current radius.
-            print(f"Number of local candidates: {len(local_candidates)}")
-            if len(local_candidates) == 0: # if no candidates are inside this radius, matching is impossible
-                print("No candidates found inside this radius.") # print a message explaining that no search can be done.
-                results.append({
-                    "strategy": "local_search",
-                    "track_id": int(row["track_id"]),
-                    "radius": radius,
-                    "number_of_candidates": 0,
-                    "predicted_z,y,x": None,
-                    "target_z,y,x": target_point_tuple,
-                    "distance_to_target": None,
-                    "highest_similarity_score": None,
-                    "runtime_seconds": None
-                })
+
+        query_embedding = (
+            query_embedding
+            .float()
+            .cpu()
+            .squeeze()
+        )
+
+        print(
+            "Query embedding shape:",
+            query_embedding.shape,
+        )
+
+        if query_embedding.ndim != 1:
+            raise ValueError(
+                "Expected one-dimensional query embedding, "
+                f"but received shape {query_embedding.shape}."
+            )
+
+        if (
+            query_embedding.shape[0]
+            != target_embeddings.shape[1]
+        ):
+            raise ValueError(
+                "Query and target embedding dimensions "
+                "do not match: "
+                f"{query_embedding.shape[0]} versus "
+                f"{target_embeddings.shape[1]}."
+            )
+
+        # ---------------------------------------------------------
+        # Full-search baseline
+        # ---------------------------------------------------------
+
+        print("\nFull-search baseline")
+
+        full_start_time = time.perf_counter()
+
+        full_best_point_px = find_best_match(
+            query_embedding=query_embedding,
+            target_embeddings=target_embeddings,
+            candidate_points=candidate_points,
+        )
+
+        full_runtime_seconds = (
+            time.perf_counter()
+            - full_start_time
+        )
+
+        full_predicted_point_um = (
+            point_pixel_to_um(
+                full_best_point_px
+            )
+        )
+
+        print(
+            "Full-search candidate count:",
+            len(candidate_points),
+        )
+
+        print(
+            "Full-search predicted point "
+            "(z-slice, y-µm, x-µm):",
+            full_predicted_point_um,
+        )
+
+        print(
+            "Full-search runtime:",
+            f"{full_runtime_seconds:.6f} seconds",
+        )
+
+        results.append(
+            {
+                "strategy": "full_search",
+                "track_id": track_id,
+                "query_frame": query_frame,
+                "target_frame": target_frame,
+                "radius_um": None,
+                "number_of_candidates": int(
+                    len(candidate_points)
+                ),
+                "query_point_um_z,y,x": format_point(
+                    query_point_um
+                ),
+                "predicted_point_um_z,y,x": format_point(
+                    full_predicted_point_um
+                ),
+                "runtime_seconds": float(
+                    full_runtime_seconds
+                ),
+                # The full search is the comparison baseline.
+                "same_match_as_full_search": None,
+            }
+        )
+
+        # ---------------------------------------------------------
+        # Local searches
+        # ---------------------------------------------------------
+
+        print("\nLocal searches")
+
+        for radius_um in SEARCH_RADII_UM:
+            # Local runtime includes:
+            # 1. radius-based candidate filtering
+            # 2. embedding comparison
+            local_start_time = time.perf_counter()
+
+            (
+                local_candidates,
+                local_mask,
+            ) = filter_candidates_by_radius_um(
+                candidate_points=candidate_points,
+                center_point_px=query_point_px,
+                radius_um=radius_um,
+            )
+
+            print(
+                f"\nRadius: {radius_um} µm"
+            )
+
+            print(
+                "Local candidate count:",
+                len(local_candidates),
+            )
+
+            if len(local_candidates) == 0:
+                local_runtime_seconds = (
+                    time.perf_counter()
+                    - local_start_time
+                )
+
+                print(
+                    "No candidates found inside "
+                    "this search radius."
+                )
+
+                results.append(
+                    {
+                        "strategy": "local_search",
+                        "track_id": track_id,
+                        "query_frame": query_frame,
+                        "target_frame": target_frame,
+                        "radius_um": radius_um,
+                        "number_of_candidates": 0,
+                        "query_point_um_z,y,x": format_point(
+                            query_point_um
+                        ),
+                        "predicted_point_um_z,y,x": None,
+                        "runtime_seconds": float(
+                            local_runtime_seconds
+                        ),
+                        "same_match_as_full_search": False,
+                    }
+                )
+
                 continue
-            start_time = time.time() # start measuring runtime for local search.
-            best_point, highest_similarity_score = find_best_match( # compare query embedding only with local candidate embeddings
+
+            local_embeddings = (
+                target_embeddings[
+                    local_mask
+                ]
+            )
+
+            local_best_point_px = find_best_match(
                 query_embedding=query_embedding,
                 target_embeddings=local_embeddings,
-                candidate_points=local_candidates
+                candidate_points=local_candidates,
             )
-            runtime_seconds = time.time() - start_time # stop measuing runtime for local search
-            print(f"Best point: {best_point}")
-            print(f"Best score: {highest_similarity_score:.4f}")
-            print(f"Runtime: {runtime_seconds:.6f} seconds")
-            results.append({
-                "strategy": "local_search",
-                "track_id": int(row["track_id"]),
-                "radius": radius,
-                "number_of_candidates": len(local_candidates),
-                "predicted_z,y,x": best_point,
-                "target_z,y,x": target_point_tuple,
-                "distance_to_target": float(distance_3d(best_point, target_point_tuple)),
-                "highest_similarity_score": float(highest_similarity_score),
-                "runtime_seconds": float(runtime_seconds)
-            })
 
-    results_df = pd.DataFrame(results)
-    print("\nSummary Table")
-    print(results_df)
-    results_df.to_csv(OUTPUT_RESULTS_PATH, index=False)
-    print("Results saved")
+            local_runtime_seconds = (
+                time.perf_counter()
+                - local_start_time
+            )
+
+            local_predicted_point_um = (
+                point_pixel_to_um(
+                    local_best_point_px
+                )
+            )
+
+            same_match_as_full = bool(
+                np.array_equal(
+                    local_best_point_px,
+                    full_best_point_px,
+                )
+            )
+
+            print(
+                "Local predicted point "
+                "(z-slice, y-µm, x-µm):",
+                local_predicted_point_um,
+            )
+
+            print(
+                "Same match as full search:",
+                same_match_as_full,
+            )
+
+            print(
+                "Local-search runtime:",
+                f"{local_runtime_seconds:.6f} seconds",
+            )
+
+            results.append(
+                {
+                    "strategy": "local_search",
+                    "track_id": track_id,
+                    "query_frame": query_frame,
+                    "target_frame": target_frame,
+                    "radius_um": radius_um,
+                    "number_of_candidates": int(
+                        len(local_candidates)
+                    ),
+                    "query_point_um_z,y,x": format_point(
+                        query_point_um
+                    ),
+                    "predicted_point_um_z,y,x": format_point(
+                        local_predicted_point_um
+                    ),
+                    "runtime_seconds": float(
+                        local_runtime_seconds
+                    ),
+                    "same_match_as_full_search": (
+                        same_match_as_full
+                    ),
+                }
+            )
+
+        # Add an empty row after this track, except after the last one.
+        if (
+            ADD_BLANK_ROW_BETWEEN_TRACKS
+            and pair_number < len(label_pairs) - 1
+        ):
+            results.append(
+                empty_result_row()
+            )
+
+    # -------------------------------------------------------------
+    # Save result table
+    # -------------------------------------------------------------
+
+    results_df = pd.DataFrame(
+        results,
+        columns=OUTPUT_COLUMNS,
+    )
+
+    print("\n" + "=" * 70)
+    print("Summary table")
+    print("=" * 70)
+
+    print(
+        results_df.to_string(
+            index=False
+        )
+    )
+
+    results_df.to_csv(
+        OUTPUT_RESULTS_PATH,
+        index=False,
+    )
+
+    print("\nResults saved to:")
+    print(OUTPUT_RESULTS_PATH)
+
     print("\nDone.")
+
 
 if __name__ == "__main__":
     main()
-
