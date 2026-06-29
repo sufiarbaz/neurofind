@@ -1,4 +1,4 @@
-# Data and models
+# Data and models (broad ignore - specific exceptions below)
 data/
 models/
 *.tif
@@ -11,11 +11,24 @@ models/
 *.ckpt
 *.sec
 
+# --- Exceptions: commit these specific small source files ---
+# Each folder level must be un-ignored before the files inside it.
+
+# Raw label CSV (the true input; the pairs file is regenerated from this)
+!data/
+!data/time_data_labeled/
+!data/time_data_labeled/33648_A5_TS_dftcorr_02.csv
+
+# Two small precomputed arrays (the 444 MB embeddings file stays
+# ignored on purpose and is delivered via Google Drive instead)
+!data/embeddings/
+!data/embeddings/candidate_points_A5.npy
+!data/embeddings/candidate_volume_indices_A5.npy
+
+
+
 # External repositories
 dinov3/
-
-# Embeddings
-GUI/embeddings/
 
 # Python
 __pycache__/
@@ -26,6 +39,9 @@ __pycache__/
 venv/
 .venv/
 .env/
+
+# Experiment logs
+logs/
 
 # Outputs
 outputs/
