@@ -41,12 +41,12 @@ data/embeddings/embeddings_dinov3_A5_128_7.npy
 The DINOv3 is a complete repository. Download the `dinov3` folder from:
 https://www.studon.fau.de/studon/ilias.php?baseClass=ilrepositorygui&cmdNode=13a:ry&cmdClass=ilObjFileGUI&cmd=sendfile&ref_id=6937306
 
-Place it at the projec root:
+Place it at the project root:
 ```
 dinov3
 ```
 
-### 3. The traned model checkpoint
+### 3. The trained model checkpoint
 Download the `spine_embedder_ssl_dinov3_128_7_5`(~342 MB) from:
 https://www.studon.fau.de/studon/ilias.php?baseClass=ilrepositorygui&cmdNode=13a:ry&cmdClass=ilObjFileGUI&cmd=sendfile&ref_id=6996853
 
