@@ -1,4 +1,4 @@
-# Data and models (broad ignore - specific exceptions below)
+# Data and models (broad ignore -- specific exceptions below)
 data/
 models/
 *.tif
@@ -14,18 +14,29 @@ models/
 # --- Exceptions: commit these specific small source files ---
 # Each folder level must be un-ignored before the files inside it.
 
-# Raw label CSV (the true input; the pairs file is regenerated from this)
+# Raw label CSVs (the true input; the pairs files are regenerated from these)
 !data/
 !data/time_data_labeled/
+!data/time_data_labeled/33648_A1_TS_dftcorr_01.csv
 !data/time_data_labeled/33648_A5_TS_dftcorr_02.csv
+!data/time_data_labeled/33648_B2_TS_dftcorr_04.csv
 
-# Two small precomputed arrays (the 444 MB embeddings file stays
-# ignored on purpose and is delivered via Google Drive instead)
+# Small precomputed files, per stack (the large embeddings .npy stays ignored on
+# purpose and is delivered separately -- see the README for where to get them)
 !data/embeddings/
+!data/embeddings/candidate_points_A1.npy
 !data/embeddings/candidate_points_A5.npy
-!data/embeddings/candidate_volume_indices_A5.npy
+!data/embeddings/candidate_points_B2.npy
+!data/embeddings/candidate_frame_numbers_A1.npy
+!data/embeddings/candidate_frame_numbers_A5.npy
+!data/embeddings/candidate_frame_numbers_B2.npy
+!data/embeddings/embedding_rate_A1.json
+!data/embeddings/embedding_rate_A5.json
+!data/embeddings/embedding_rate_B2.json
 
-
+# Generated query/target pairs
+!data/formatted_human_labels/
+!data/formatted_human_labels/*.csv
 
 # External repositories
 dinov3/
@@ -40,12 +51,8 @@ venv/
 .venv/
 .env/
 
-# Experiment logs
-logs/
-
 # Outputs
 outputs/
-results/
 
 # IDE / OS
 .vscode/
