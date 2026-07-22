@@ -181,7 +181,7 @@ python -m src.GUI.napari_gui
 
 ## Project layout
 ```
-Neurofind Project/
+neurofind/
 ├── data/
 │   ├── time_data_labeled/      #raw TIFF stacks and raw human-label CSVs
 │   ├── formatted_human_labels/      #generated query/target pairs
