@@ -40,9 +40,9 @@ STACK_PATH = BASE_DIR / "data" / "time_data_labeled" / STACK_FILENAME
 
 # The precomputed files. They live in data/embeddings/
 # They are produced by running src/base/compute_full_embeddings_hpc.py
-TARGET_CANDIDATES_PATH = BASE_DIR / "data" / "embeddings" / "candidate_points_{STACK_NAME}.npy"
-TARGET_EMBEDDINGS_PATH = BASE_DIR / "data" / "embeddings" / "embeddings_dinov3_{STACK_NAME}.npy"
-TARGET_VOLUME_INDICES_PATH = BASE_DIR / "data" / "embeddings" / "candidate_frame_numbers_{STACK_NAME}.npy"
+TARGET_CANDIDATES_PATH = BASE_DIR / "data" / "embeddings" / f"candidate_points_{STACK_NAME}.npy"
+TARGET_EMBEDDINGS_PATH = BASE_DIR / "data" / "embeddings" / f"embeddings_dinov3_{STACK_NAME}.npy"
+TARGET_VOLUME_INDICES_PATH = BASE_DIR / "data" / "embeddings" / f"candidate_frame_numbers_{STACK_NAME}.npy"
 
 MODEL_PATH = BASE_DIR / "models" / "spine_embedder_ssl_dinov3_128_7_5pth.sec"  # place the trained model in: models/
 
