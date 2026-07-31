@@ -3,7 +3,7 @@
 This project tracks dendritic spines across time frames of a microscopy stack using DINOv3 embeddings. The controlled experiments are performed using human-labeled data as query point. For a spine clicked in one frame in the napari-GUI, the model finds the most similar point in a later time frame.
 
 **Hypothesis 1 (local search):** *"A smaller area around the selected point might give the same match as full candidate-points search but faster."*
-It compares local search strategies against a full serch baseline, instead of comparing the query against every candidate, it restricts the search to a smaller region around the query point.
+It compares local search strategies against a full search baseline, instead of comparing the query against every candidate, it restricts the search to a smaller region around the query point.
 
 The strategies compared are:
 - `full_search`: compare against all candidates (the baseline)
@@ -15,7 +15,7 @@ Grid sizes tested: 2x2, 4x4, 8x8, 16x16, 32x32.
 
 Every prediction, in both hypotheses, is scored by its distance (in micrometers) to the human-labeled target point.
 
-"The experiments of both the hypotheses have been run across **3 stacks (A1, A5, B2) x 5 consecutive time frame pairs (0→1, 1→2, 2→3, 3→4, 4→5)**, totaling 427 tracked observations."
+The experiments of both the hypotheses have been run across **3 stacks (A1, A5, B2) x 5 consecutive time frame pairs (0→1, 1→2, 2→3, 3→4, 4→5)**, totaling 427 tracked observations.
 
 ---
 
@@ -203,7 +203,7 @@ neurofind/
 │   │   ├── local_search/      #the H1 experiment package
 │   │   └── grid_search/      #the H2 experiment package
 │   └── GUI/
-│       └── napari_gui_stack_view.py      #interactive viewer where frames overlaid on top of each other.
+│       ├── napari_gui_stack_view.py      #interactive viewer where frames overlaid on top of each other.
 │       └── napari_gui_alongside_view.py      #interactive viewer where frames are in separate windows
 ├── logs/
 │   └── experiment_log.xlsx      #logs of experiments
