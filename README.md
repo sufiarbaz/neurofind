@@ -1,6 +1,6 @@
 # Neurofind: Re-identifying dendritic spines across time with an interactive Napari GUI
 
-This project tracks dendritic spines across time frames of a microscopy stack using DINOv3 embeddings.The controlled experiments are performed using human-labeled data as query point. For a spine clicked in one frame in the napari-GUI, the model finds the most similar point in a later time frame.
+This project tracks dendritic spines across time frames of a microscopy stack using DINOv3 embeddings. The controlled experiments are performed using human-labeled data as query point. For a spine clicked in one frame in the napari-GUI, the model finds the most similar point in a later time frame.
 
 **Hypothesis 1 (local search):** *"A smaller area around the selected point might give the same match as full candidate-points search but faster."*
 It compares local search strategies against a full serch baseline, instead of comparing the query against every candidate, it restricts the search to a smaller region around the query point.
@@ -10,25 +10,25 @@ The strategies compared are:
 - `euclidean`: candidates inside a circle, sized as a % of the total imaged area
 - `manhattan`: candidates inside a diamond of the same area
 
-**Hypothesis 2 (grid search):** *"Dividing the image into a fixed grid and searching only the cell the query point fails into gives a trede-off between accuracy and search time, controlled by the grid size."* The image is divided into a fixed NxN grid; only the cell containing the click is searched.
+**Hypothesis 2 (grid search):** *"Dividing the image into a fixed grid and searching only the cell the query point falls into gives a trade-off between accuracy and search time, controlled by the grid size."* The image is divided into a fixed NxN grid; only the cell containing the click is searched.
 Grid sizes tested: 2x2, 4x4, 8x8, 16x16, 32x32.
 
 Every prediction, in both hypotheses, is scored by its distance (in micrometers) to the human-labeled target point.
 
-The experiments of both the hypotheses have been run across **3 stacks (A1, A5, B2) x 5 consecutive time frame pairs (0→1, 1→2, 2→3, 3→4, 4→5)
+"The experiments of both the hypotheses have been run across **3 stacks (A1, A5, B2) x 5 consecutive time frame pairs (0→1, 1→2, 2→3, 3→4, 4→5)**, totaling 427 tracked observations."
 
 ---
 
 ## Requirements
 - Python 3.13
-- The packages in `requierements.txt`
+- The packages in `requirements.txt`
 ```
 pip install -r requirements.txt
 ```
 ---
 
 ## Setup files and folders not in this repository
-Some files are too larger for GitHub or are third-party, so they are not committed. Get them as follows:
+Some files are too large for GitHub or are third-party, so they are not committed. Get them as follows:
 
 ### 1. The DINOv3 repository
 The DINOv3 is a complete repository. Download the `dinov3` folder from:
@@ -48,7 +48,7 @@ Place it in:
 models/spine_embedder_ssl_dinov3_128_7_5pth.sec
 ```
 
-### 3. The raw A5 TIFF stack
+### 3. The raw TIFF stacks
 Download `33648_A1_TS_dftcorr.tif` (~42 MB) from:
 https://drive.google.com/file/d/10EOQ5xvHCBFRxqYRFBydbUhk0UW_n7vV/view?usp=sharing
 Download `33648_A5_TS_dftcorr.tif` (~144 MB) from:
@@ -111,7 +111,7 @@ It reads the TIFF named in `stack_settings.py` and prints the numbers to paste b
 ---
 
 ## How to run
-All commands are run from the `project root`, so that the local `dinvov3` folder is found correctly.
+All commands are run from the `project root`, so that the local `dinov3` folder is found correctly.
 
 The query/target pairs file (the ground truth the experiments score against) is created
 automatically from the raw human labels the first time an experiment runs, if it isn't
