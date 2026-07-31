@@ -1,5 +1,5 @@
 """
-napari_gui.py
+napari_gui_stack_view.py
 
 An interactive viewer, click a point in the query frame, and the model finds the best-matching point in the target frame and draws it.
 
@@ -7,7 +7,7 @@ When a click happens, it crop a box around the click, turn it into a fingerprint
 Compare that fingerprint against EVERY candidate in the target frame, and show the closest match. 
 
 How to run it (from the project root):
-    python -m src.GUI.napari_gui
+    python -m src.GUI.napari_gui_stack_view
 """
 
 import os
@@ -228,4 +228,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -157,11 +157,16 @@ Results are written to:
 outputs/h2_grid_search/<STACK>_frame<Q>_to_frame<T>_grid_search_results.csv
 ```
 
-### 4. Interactive GUI
-Opens a napari window with the query and target frames side by side. Click a spine in
-the query frame to see the model's predicted match in the target frame.
+### 4. Interactive GUI (stacked view)
+Opens a napari window with the query and target frames overlaid as separate layers in one window. Click a spine in the query frame to see the model's predicted match in the target frame.
 ```
-python -m src.GUI.napari_gui
+python -m src.GUI.napari_gui_stack_view
+```
+
+### 5. Interactive GUI (alongside view)
+Same as above, but the query and target frames are shown in two separate windows, positioned next to each other, rather than overlaid.
+```
+python -m src.GUI.napari_gui_alongside_view
 ```
 
 ---
@@ -198,7 +203,8 @@ neurofind/
 │   │   ├── local_search/      #the H1 experiment package
 │   │   └── grid_search/      #the H2 experiment package
 │   └── GUI/
-│       └── napari_gui.py      #interactive viewer
+│       └── napari_gui_stack_view.py      #interactive viewer, frames overlaid
+│       └── napari_gui_alongside_view.py      #interactive viewer, frames in separate window
 ├── logs/
 │   └── experiment_log.xlsx      #logs of experiments
 ├── models/      #trained model checkpoint (not committed)
