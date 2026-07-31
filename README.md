@@ -203,8 +203,8 @@ neurofind/
 │   │   ├── local_search/      #the H1 experiment package
 │   │   └── grid_search/      #the H2 experiment package
 │   └── GUI/
-│       └── napari_gui_stack_view.py      #interactive viewer, frames overlaid
-│       └── napari_gui_alongside_view.py      #interactive viewer, frames in separate window
+│       └── napari_gui_stack_view.py      #interactive viewer where frames overlaid on top of each other.
+│       └── napari_gui_alongside_view.py      #interactive viewer where frames are in separate windows
 ├── logs/
 │   └── experiment_log.xlsx      #logs of experiments
 ├── models/      #trained model checkpoint (not committed)
